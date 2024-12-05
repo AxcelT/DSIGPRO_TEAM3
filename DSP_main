@@ -3,7 +3,6 @@ import librosa
 import numpy as np
 import matplotlib.pyplot as plt
 import soundfile as sf
-import shutil  # For clearing directories
 
 # Helper Function: Log Messages
 def log_message(message):
@@ -12,20 +11,18 @@ def log_message(message):
 
 # Step 1: Data Preprocessing
 def preprocess_audio(file_path):
-    """Load and preprocess audio file (resampling and mono conversion)."""
+    """Load audio file (no resampling or conversion)."""
     log_message(f"Loading audio file: {file_path}")
-    audio, sr = librosa.load(file_path, sr=None)  # Load audio with original sampling rate
-    log_message(f"Original sampling rate: {sr}")
-    audio_resampled = librosa.resample(audio, orig_sr=sr, target_sr=16000)
-    log_message(f"Audio resampled to 16000 Hz and converted to mono.")
-    return audio_resampled, 16000
+    audio, sr = librosa.load(file_path, sr=None, mono=True)  # Load audio with original sampling rate
+    log_message(f"Sample Rate: {sr}")
+    log_message(f"Duration: {len(audio) / sr:.2f} seconds")
+    return audio, sr
 
 # Step 2: Short Segment Detection
 def detect_short_segments(audio, sr, energy_threshold=0.02, min_duration=0.3, max_duration=2.0):
-    """Detect short speech segments based on normalized energy."""
+    """Detect short speech segments based on energy."""
     log_message("Detecting short speech segments...")
     energy = np.square(audio)  # Calculate energy
-    energy /= np.max(energy)  # Normalize energy
     segment_indices = []
     start = None
 
@@ -50,7 +47,7 @@ def detect_short_segments(audio, sr, energy_threshold=0.02, min_duration=0.3, ma
     return segment_indices
 
 # Step 3: Save Detected Segments
-def save_segments(audio, sr, segments, output_dir, base_name):
+def save_segments(audio, sr, segments, output_dir, base_filename):
     """Save each detected segment as a separate audio file."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -58,19 +55,19 @@ def save_segments(audio, sr, segments, output_dir, base_name):
     log_message(f"Saving detected segments to '{output_dir}'...")
     for i, (start, end) in enumerate(segments, 1):
         segment = audio[int(start * sr):int(end * sr)]
-        output_path = os.path.join(output_dir, f"{base_name}_segment_{i}.wav")
+        output_path = os.path.join(output_dir, f"{base_filename}_segment_{i}.wav")
         sf.write(output_path, segment, sr)
         log_message(f"Segment saved: {output_path} ({start:.2f}s - {end:.2f}s)")
 
 # Step 4: Generate Subtitles
-def generate_subtitles(segments, output_path, base_name):
+def generate_subtitles(segments, output_path):
     """Generate subtitle file in .srt format for detected segments."""
     log_message("Generating subtitles...")
     with open(output_path, "w") as subtitle_file:
         for i, (start, end) in enumerate(segments, 1):
             start_time = format_time(start)
             end_time = format_time(end)
-            subtitle_file.write(f"{i}\n{start_time} --> {end_time}\n{base_name} Segment {i}\n\n")
+            subtitle_file.write(f"{i}\n{start_time} --> {end_time}\n[Segment {i}]\n\n")
     log_message(f"Subtitles saved: {output_path}")
 
 def format_time(seconds):
@@ -104,18 +101,14 @@ def plot_energy(audio, sr, segments, output_path):
 if __name__ == "__main__":
     input_audio = r"audio\Frasier1.wav"
     base_output_dir = r"D:\School\DSIGPRO_Project"
-    base_name = os.path.splitext(os.path.basename(input_audio))[0]
 
     # Output directories
+    base_filename = os.path.splitext(os.path.basename(input_audio))[0]
     segments_dir = os.path.join(base_output_dir, "segments")
     subtitles_dir = os.path.join(base_output_dir, "subtitles")
     plots_dir = os.path.join(base_output_dir, "plots")
 
-    # Clear output directories
-    for directory in [segments_dir, subtitles_dir, plots_dir]:
-        if os.path.exists(directory):
-            shutil.rmtree(directory)
-
+    # Ensure output directories exist
     os.makedirs(segments_dir, exist_ok=True)
     os.makedirs(subtitles_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
@@ -127,14 +120,14 @@ if __name__ == "__main__":
     short_segments = detect_short_segments(audio, sr)
 
     # Save detected segments
-    save_segments(audio, sr, short_segments, segments_dir, base_name)
+    save_segments(audio, sr, short_segments, segments_dir, base_filename)
 
     # Generate subtitles
-    subtitle_file = os.path.join(subtitles_dir, f"{base_name}_segments.srt")
-    generate_subtitles(short_segments, subtitle_file, base_name)
+    subtitle_file = os.path.join(subtitles_dir, f"{base_filename}_segments.srt")
+    generate_subtitles(short_segments, subtitle_file)
 
     # Plot energy curve
-    energy_plot_path = os.path.join(plots_dir, f"{base_name}_energy_curve.png")
+    energy_plot_path = os.path.join(plots_dir, f"{base_filename}_energy_curve.png")
     plot_energy(audio, sr, short_segments, energy_plot_path)
 
     log_message("Processing completed successfully!")
