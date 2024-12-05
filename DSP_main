@@ -100,7 +100,7 @@ def plot_energy(audio, sr, segments, output_path):
 
 # Main Function
 if __name__ == "__main__":
-    input_audio = r"audio\Hardware Implementation.wav"
+    input_audio = r"audio\Frasier1.wav"
     base_output_dir = r"D:\School\DSIGPRO_Project"
 
     # Output directories
