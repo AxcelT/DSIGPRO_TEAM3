@@ -52,20 +52,30 @@ def detect_short_segments(audio, sr, max_duration=2, min_energy=energy_threshold
     return short_segments
 
 # Step 3: Save Short Segments for Subtitle Generation
-def save_segments(audio, sr, segments, output_dir, base_filename):
-    """Save detected short speech segments as individual audio files."""
+def save_segments(audio, sr, segments, output_dir, base_filename, min_segment_duration=1.0):
+    """Save detected short speech segments as individual audio files, ensuring minimum 1-second duration."""
     log_message(f"Saving detected segments to '{output_dir}'...")
     os.makedirs(output_dir, exist_ok=True)
     saved_files = []
     for i, (start, end) in enumerate(segments):
         start_sample = int(start * sr)
         end_sample = int(end * sr)
+
+        # Adjust the end_sample to ensure a minimum segment duration
+        if end - start < min_segment_duration:
+            end_sample = start_sample + int(min_segment_duration * sr)
+            # Ensure we don't exceed the audio length
+            if end_sample > len(audio):
+                end_sample = len(audio)
+
         segment_audio = audio[start_sample:end_sample]
+        adjusted_end = end_sample / sr  # Adjusted end time for logging
         output_file = os.path.join(output_dir, f"{base_filename}_segment_{i+1}.wav")
         sf.write(output_file, segment_audio, sr)
         saved_files.append(output_file)
-        log_message(f"Segment saved: {output_file} ({start:.2f}s - {end:.2f}s)")
+        log_message(f"Segment saved: {output_file} ({start:.2f}s - {adjusted_end:.2f}s)")
     return saved_files
+
 
 # Step 4: Visualization
 def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
