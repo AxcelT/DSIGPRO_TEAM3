@@ -1,106 +1,133 @@
+import os
 import librosa
 import numpy as np
-import os
 import matplotlib.pyplot as plt
 import soundfile as sf
 
-# Logging Helper
+# Helper Function: Log Messages
 def log_message(message):
-    """Helper function to log messages."""
+    """Log messages for debugging and updates."""
     print(f"[INFO] {message}")
 
-# Step 1: Preprocessing
-def preprocess_audio(file_path, target_sr=16000):
-    """Convert audio to mono and resample to the target sampling rate."""
+# Step 1: Data Preprocessing
+def preprocess_audio(file_path):
+    """Load and preprocess audio file (resampling and mono conversion)."""
     log_message(f"Loading audio file: {file_path}")
     audio, sr = librosa.load(file_path, sr=None)  # Load audio with original sampling rate
     log_message(f"Original sampling rate: {sr}")
-    audio_resampled = librosa.resample(audio, orig_sr=sr, target_sr=target_sr)
-    log_message(f"Audio resampled to {target_sr} Hz and converted to mono.")
-    return audio_resampled, target_sr
+    audio_resampled = librosa.resample(audio, orig_sr=sr, target_sr=16000)
+    log_message(f"Audio resampled to 16000 Hz and converted to mono.")
+    return audio_resampled, 16000
 
-# Step 2: Short Speech Detection
-def detect_short_segments(audio, sr, max_duration=2.0, min_energy=0.01):
-    """
-    Detect short speech segments based on energy thresholds and duration.
-    """
+# Step 2: Short Segment Detection
+def detect_short_segments(audio, sr, energy_threshold=0.01, min_duration=0.3, max_duration=2.0):
+    """Detect short speech segments based on energy."""
     log_message("Detecting short speech segments...")
-    frame_length = int(0.025 * sr)  # 25ms frames
-    hop_length = int(0.010 * sr)   # 10ms hops
-    energy = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length).flatten()
-    times = librosa.frames_to_time(np.arange(len(energy)), sr=sr, hop_length=hop_length)
+    energy = np.square(audio)  # Calculate energy
+    segment_indices = []
+    start = None
 
-    short_segments = []
-    segment_start = None
     for i, e in enumerate(energy):
-        if e > min_energy and segment_start is None:
-            segment_start = times[i]
-        elif e <= min_energy and segment_start is not None:
-            segment_end = times[i]
-            if segment_end - segment_start <= max_duration:
-                short_segments.append((segment_start, segment_end))
-                log_message(f"Short segment detected: {segment_start:.2f}s - {segment_end:.2f}s")
-            segment_start = None
+        if e > energy_threshold:
+            if start is None:
+                start = i
+        elif start is not None:
+            end = i
+            duration = (end - start) / sr
+            if min_duration <= duration <= max_duration:
+                segment_indices.append((start / sr, end / sr))
+            start = None
 
-    return short_segments
+    if start is not None:  # Handle last segment
+        end = len(energy)
+        duration = (end - start) / sr
+        if min_duration <= duration <= max_duration:
+            segment_indices.append((start / sr, end / sr))
 
-# Step 3: Save Short Segments for Subtitle Generation
-def save_segments(audio, sr, segments, output_dir="segments"):
-    """
-    Save detected short speech segments as individual audio files.
-    """
+    log_message(f"Detected {len(segment_indices)} valid segments.")
+    return segment_indices
+
+# Step 3: Save Detected Segments
+def save_segments(audio, sr, segments, output_dir):
+    """Save each detected segment as a separate audio file."""
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     log_message(f"Saving detected segments to '{output_dir}'...")
-    os.makedirs(output_dir, exist_ok=True)
-    saved_files = []
-    for i, (start, end) in enumerate(segments):
-        start_sample = int(start * sr)
-        end_sample = int(end * sr)
-        segment_audio = audio[start_sample:end_sample]
-        output_file = os.path.join(output_dir, f"segment_{i+1}.wav")
-        sf.write(output_file, segment_audio, sr)
-        saved_files.append(output_file)
-        log_message(f"Segment saved: {output_file} ({start:.2f}s - {end:.2f}s)")
-    return saved_files
+    for i, (start, end) in enumerate(segments, 1):
+        segment = audio[int(start * sr):int(end * sr)]
+        output_path = os.path.join(output_dir, f"segment_{i}.wav")
+        sf.write(output_path, segment, sr)
+        log_message(f"Segment saved: {output_path} ({start:.2f}s - {end:.2f}s)")
 
-# Step 4: Visualization
-def plot_energy(audio, sr, energy, times, segments):
-    """
-    Plot the energy curve with detected segments.
-    """
+# Step 4: Generate Subtitles
+def generate_subtitles(segments, output_path):
+    """Generate subtitle file in .srt format for detected segments."""
+    log_message("Generating subtitles...")
+    with open(output_path, "w") as subtitle_file:
+        for i, (start, end) in enumerate(segments, 1):
+            start_time = format_time(start)
+            end_time = format_time(end)
+            subtitle_file.write(f"{i}\n{start_time} --> {end_time}\n[Segment {i}]\n\n")
+    log_message(f"Subtitles saved: {output_path}")
+
+def format_time(seconds):
+    """Format time in seconds to SRT time format (hh:mm:ss,ms)."""
+    millis = int((seconds - int(seconds)) * 1000)
+    seconds = int(seconds)
+    minutes = seconds // 60
+    seconds = seconds % 60
+    hours = minutes // 60
+    minutes = minutes % 60
+    return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
+
+# Step 5: Plot Energy Curve
+def plot_energy(audio, sr, segments, output_path):
+    """Plot energy curve with detected segments highlighted."""
     log_message("Plotting energy curve with detected segments...")
-    plt.figure(figsize=(10, 6))
-    plt.plot(times, energy, label="RMS Energy")
-    plt.axhline(y=0.01, color="red", linestyle="--", label="Energy Threshold")
+    energy = np.square(audio)
+    times = np.arange(len(energy)) / sr
+    plt.figure(figsize=(12, 6))
+    plt.plot(times, energy, label="Energy")
     for start, end in segments:
-        plt.axvspan(start, end, color="green", alpha=0.3, label="Detected Segment")
+        plt.axvspan(start, end, color="red", alpha=0.3, label="Detected Segment")
+    plt.title("Energy Curve with Detected Short Segments")
     plt.xlabel("Time (s)")
     plt.ylabel("Energy")
     plt.legend()
-    plt.title("Energy Curve with Detected Short Speech Segments")
-    plt.show()
+    plt.savefig(output_path)
+    log_message(f"Energy curve saved: {output_path}")
 
-# Main Script
+# Main Function
 if __name__ == "__main__":
-    # Audio file path
-    audio_file = r"audio\Hardware Implementation.wav"
-    
-    # Step 1: Preprocess audio
-    audio, sr = preprocess_audio(audio_file)
+    input_audio = r"audio\Hardware Implementation.wav"
+    base_output_dir = r"D:\School\DSIGPRO_Project"
 
-    # Step 2: Detect short segments
-    short_segments = detect_short_segments(audio, sr, max_duration=2.0, min_energy=0.01)
-    log_message(f"Detected {len(short_segments)} short segments.")
+    # Output directories
+    segments_dir = os.path.join(base_output_dir, "segments")
+    subtitles_dir = os.path.join(base_output_dir, "subtitles")
+    plots_dir = os.path.join(base_output_dir, "plots")
 
-    # Step 3: Save short segments
-    if short_segments:
-        saved_files = save_segments(audio, sr, short_segments)
-        log_message(f"Saved {len(saved_files)} short segments for further processing.")
-    else:
-        log_message("No short speech segments detected.")
+    # Ensure output directories exist
+    os.makedirs(segments_dir, exist_ok=True)
+    os.makedirs(subtitles_dir, exist_ok=True)
+    os.makedirs(plots_dir, exist_ok=True)
 
-    # Step 4: Visualize energy curve
-    frame_length = int(0.025 * sr)
-    hop_length = int(0.010 * sr)
-    energy = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length).flatten()
-    times = librosa.frames_to_time(np.arange(len(energy)), sr=sr, hop_length=hop_length)
-    plot_energy(audio, sr, energy, times, short_segments)
+    # Preprocess audio
+    audio, sr = preprocess_audio(input_audio)
+
+    # Detect short segments
+    short_segments = detect_short_segments(audio, sr)
+
+    # Save detected segments
+    save_segments(audio, sr, short_segments, segments_dir)
+
+    # Generate subtitles
+    subtitle_file = os.path.join(subtitles_dir, "segments.srt")
+    generate_subtitles(short_segments, subtitle_file)
+
+    # Plot energy curve
+    energy_plot_path = os.path.join(plots_dir, "energy_curve.png")
+    plot_energy(audio, sr, short_segments, energy_plot_path)
+
+    log_message("Processing completed successfully!")
