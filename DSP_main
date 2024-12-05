@@ -81,20 +81,31 @@ def save_segments(audio, sr, segments, output_dir, base_filename, min_segment_du
 def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     """Plot the energy curve with detected segments."""
     log_message("Plotting energy curve with detected segments...")
-    plt.figure(figsize=(12, 6))
+
+    plt.figure(figsize=(16, 8))  # Make the plot wider by increasing the width
     plt.plot(times, energy, label="RMS Energy")
     plt.axhline(y=energy_threshold, color="red", linestyle="--", label="Energy Threshold")
+    
+    # Highlight detected segments
     for start, end in segments:
         plt.axvspan(start, end, color="green", alpha=0.3)
+
+    # Customize x-axis ticks for better granularity
+    max_time = times[-1]
+    plt.xticks(np.arange(0, max_time + 5, 5))  # Set x-axis ticks every 5 seconds
+    
     plt.xlabel("Time (s)")
     plt.ylabel("Energy")
     plt.title(f"Energy Curve for {base_filename}")
     plt.legend()
     plt.grid(True)  # Add grid to the plot
+
+    # Save the plot
     plot_path = os.path.join(output_dir, f"{base_filename}_energy_curve.png")
     plt.savefig(plot_path)
     log_message(f"Energy curve saved: {plot_path}")
     plt.close()
+
 
 # Main Script
 if __name__ == "__main__":
