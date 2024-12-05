@@ -85,7 +85,7 @@ if __name__ == "__main__":
     base_filename = os.path.splitext(os.path.basename(audio_file))[0]
 
     # Output directories
-    output_base_dir = "outputs"
+    output_base_dir = r"D:\School\DSIGPRO_Project\outputs"
     segments_dir = os.path.join(output_base_dir, "segments")
     plots_dir = os.path.join(output_base_dir, "plots")
 
