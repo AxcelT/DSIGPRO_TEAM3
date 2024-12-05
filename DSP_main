@@ -4,6 +4,9 @@ import os
 import matplotlib.pyplot as plt
 import soundfile as sf
 
+# Hyperparameters
+energy_threshold = 0.06
+
 # Logging Helper
 def log_message(message):
     """Helper function to log messages."""
@@ -21,7 +24,7 @@ def preprocess_audio(file_path, target_sr=16000):
     return audio, target_sr
 
 # Step 2: Short Speech Detection
-def detect_short_segments(audio, sr, max_duration=1.5, min_energy=0.02, min_gap=0.1):
+def detect_short_segments(audio, sr, max_duration=2, min_energy=energy_threshold, min_gap=0.5):
     """
     Detect short speech segments based on energy thresholds and duration.
     Added stricter criteria for energy and minimum gap between segments.
@@ -70,7 +73,7 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     log_message("Plotting energy curve with detected segments...")
     plt.figure(figsize=(12, 6))
     plt.plot(times, energy, label="RMS Energy")
-    plt.axhline(y=0.02, color="red", linestyle="--", label="Energy Threshold")
+    plt.axhline(y=energy_threshold, color="red", linestyle="--", label="Energy Threshold")
     for start, end in segments:
         plt.axvspan(start, end, color="green", alpha=0.3)
     plt.xlabel("Time (s)")
