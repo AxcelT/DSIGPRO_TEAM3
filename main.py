@@ -1,10 +1,9 @@
-import csv
+from pyannote.audio import Pipeline
+from pyannote.audio import Model
 import librosa
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from pyannote.audio import Pipeline, Model
-from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
 
 # Replace with your verified Hugging Face access token
 ACCESS_TOKEN = "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"
@@ -45,22 +44,26 @@ if torch.cuda.is_available():
 else:
     log_message("No GPU detected. Using CPU.")
 
-# Step 3: Read CSV Segments
-def read_csv_segments(csv_file):
-    """Read segments from the provided CSV file."""
+# Step 3: Speaker Diarization and Segment Filtering
+def detect_short_segments(file_path, max_duration=2.0):
+    """Identify short speech segments (< max_duration)."""
+    log_message("Preprocessing audio for diarization...")
+    audio, sr = preprocess_audio(file_path)
+    
+    log_message("Running diarization pipeline...")
+    diarization = pipeline({"waveform": torch.tensor(audio).unsqueeze(0), "sample_rate": sr})
+
     short_segments = []
-    all_segments = []
-    with open(csv_file, 'r') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            start_time, end_time, speaker, transcript = row
-            start_time, end_time = float(start_time), float(end_time)
-            duration = end_time - start_time
-            segment = {"start": start_time, "end": end_time, "speaker": speaker, "duration": duration, "transcript": transcript}
-            all_segments.append(segment)
-            if duration < 2.0:  # Short segment threshold
-                short_segments.append(segment)
-    return short_segments, all_segments
+    log_message("Analyzing diarization segments...")
+    for segment, _, speaker in diarization.itertracks(yield_label=True):
+        duration = segment.end - segment.start
+        log_message(f"Segment detected - Start: {segment.start:.2f}s, End: {segment.end:.2f}s, Duration: {duration:.2f}s, Speaker: {speaker}")
+        if duration <= max_duration:
+            short_segments.append((segment.start, segment.end, speaker))
+            log_message(f"Short segment added - Start: {segment.start:.2f}s, End: {segment.end:.2f}s, Speaker: {speaker}")
+        else:
+            log_message(f"Segment ignored (duration > {max_duration}s) - Duration: {duration:.2f}s, Speaker: {speaker}")
+    return short_segments
 
 # Step 4: Feature Extraction
 def extract_features(audio, sr, segment_start, segment_end):
@@ -92,54 +95,25 @@ def classify_segment(features):
     else:
         return "Unknown"
 
-# Step 6: Evaluation Metrics
-def evaluate_metrics(ground_truth, predictions):
-    """Compute precision, recall, and F1 score."""
-    y_true = [segment["speaker"] for segment in ground_truth]
-    y_pred = [prediction["speaker"] for prediction in predictions]
-    precision = precision_score(y_true, y_pred, average="micro")
-    recall = recall_score(y_true, y_pred, average="micro")
-    f1 = f1_score(y_true, y_pred, average="micro")
-    return precision, recall, f1
-
 # Main Function
 if __name__ == "__main__":
-    csv_file = "Frasier_02x01.csv"
     audio_file = r"audio\Hardware Implementation.wav"
-    
-    # Step 1: Read Ground Truth Short Segments
-    log_message("Reading CSV data...")
-    short_segments_gt, all_segments_gt = read_csv_segments(csv_file)
-    log_message(f"Loaded {len(short_segments_gt)} ground truth short segments.")
+    log_message("Starting short speech segment detection...")
 
-    # Step 2: Preprocess Audio
-    log_message("Preprocessing audio...")
-    audio, sr = preprocess_audio(audio_file)
+    # Detect short segments
+    short_segments = detect_short_segments(audio_file)
+    log_message(f"Detected {len(short_segments)} short segments.")
 
-    # Step 3: Detect Short Segments
-    log_message("Detecting short segments using diarization pipeline...")
-    diarization = pipeline({"waveform": torch.tensor(audio).unsqueeze(0), "sample_rate": sr})
-    detected_segments = []
-    for segment, _, speaker in diarization.itertracks(yield_label=True):
-        if segment.end - segment.start < 2.0:
-            detected_segments.append({"start": segment.start, "end": segment.end, "speaker": speaker})
-
-    # Step 4: Evaluate Results
-    precision, recall, f1 = evaluate_metrics(short_segments_gt, detected_segments)
-    log_message(f"Precision: {precision:.2f}, Recall: {recall:.2f}, F1 Score: {f1:.2f}")
-
-    # Step 5: Visualize Results
-    short_durations_gt = [s["duration"] for s in short_segments_gt]
-    short_durations_detected = [s["end"] - s["start"] for s in detected_segments]
-    all_durations = [s["duration"] for s in all_segments_gt]
-
-    plt.hist(short_durations_gt, bins=20, alpha=0.5, label="Ground Truth Short Segments")
-    plt.hist(short_durations_detected, bins=20, alpha=0.5, label="Detected Short Segments")
-    plt.hist(all_durations, bins=20, alpha=0.5, label="All Segments")
-    plt.xlabel("Duration (seconds)")
-    plt.ylabel("Frequency")
-    plt.legend(loc="upper right")
-    plt.title("Segment Duration Comparison")
-    plt.show()
+    if short_segments:
+        log_message("Processing short segments...")
+        audio, sr = preprocess_audio(audio_file)
+        for start, end, speaker in short_segments:
+            log_message(f"Processing segment - Start: {start:.2f}s, End: {end:.2f}s, Speaker: {speaker}")
+            features = extract_features(audio, sr, start, end)
+            classification = classify_segment(features)
+            log_message(f"Segment classification: {classification}")
+            print(f"[RESULT] Speaker {speaker} from {start:.2f}s to {end:.2f}s classified as {classification}.")
+    else:
+        log_message("No short segments detected.")
 
     log_message("Script execution completed.")
