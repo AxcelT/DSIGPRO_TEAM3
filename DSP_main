@@ -15,15 +15,14 @@ def preprocess_audio(file_path, target_sr=16000):
     log_message(f"Loading audio file: {file_path}")
     audio, sr = librosa.load(file_path, sr=None)  # Load audio with original sampling rate
     log_message(f"Original sampling rate: {sr}")
-    audio_resampled = librosa.resample(audio, orig_sr=sr, target_sr=target_sr)
-    log_message(f"Audio resampled to {target_sr} Hz and converted to mono.")
-    return audio_resampled, target_sr
+    if sr != target_sr:
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=target_sr)
+        log_message(f"Audio resampled to {target_sr} Hz.")
+    return audio, target_sr
 
 # Step 2: Short Speech Detection
 def detect_short_segments(audio, sr, max_duration=2.0, min_energy=0.01):
-    """
-    Detect short speech segments based on energy thresholds and duration.
-    """
+    """Detect short speech segments based on energy thresholds and duration."""
     log_message("Detecting short speech segments...")
     frame_length = int(0.025 * sr)  # 25ms frames
     hop_length = int(0.010 * sr)   # 10ms hops
@@ -42,13 +41,12 @@ def detect_short_segments(audio, sr, max_duration=2.0, min_energy=0.01):
                 log_message(f"Short segment detected: {segment_start:.2f}s - {segment_end:.2f}s")
             segment_start = None
 
+    log_message(f"Total short segments detected: {len(short_segments)}")
     return short_segments
 
 # Step 3: Save Short Segments for Subtitle Generation
-def save_segments(audio, sr, segments, output_dir="segments"):
-    """
-    Save detected short speech segments as individual audio files.
-    """
+def save_segments(audio, sr, segments, output_dir, base_filename):
+    """Save detected short speech segments as individual audio files."""
     log_message(f"Saving detected segments to '{output_dir}'...")
     os.makedirs(output_dir, exist_ok=True)
     saved_files = []
@@ -56,19 +54,17 @@ def save_segments(audio, sr, segments, output_dir="segments"):
         start_sample = int(start * sr)
         end_sample = int(end * sr)
         segment_audio = audio[start_sample:end_sample]
-        output_file = os.path.join(output_dir, f"segment_{i+1}.wav")
+        output_file = os.path.join(output_dir, f"{base_filename}_segment_{i+1}.wav")
         sf.write(output_file, segment_audio, sr)
         saved_files.append(output_file)
         log_message(f"Segment saved: {output_file} ({start:.2f}s - {end:.2f}s)")
     return saved_files
 
 # Step 4: Visualization
-def plot_energy(audio, sr, energy, times, segments):
-    """
-    Plot the energy curve with detected segments.
-    """
+def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
+    """Plot the energy curve with detected segments."""
     log_message("Plotting energy curve with detected segments...")
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 6))
     plt.plot(times, energy, label="RMS Energy")
     plt.axhline(y=0.01, color="red", linestyle="--", label="Energy Threshold")
     for start, end in segments:
@@ -76,25 +72,42 @@ def plot_energy(audio, sr, energy, times, segments):
     plt.xlabel("Time (s)")
     plt.ylabel("Energy")
     plt.legend()
-    plt.title("Energy Curve with Detected Short Speech Segments")
-    plt.show()
+    plt.title(f"Energy Curve for {base_filename}")
+    plot_path = os.path.join(output_dir, f"{base_filename}_energy_curve.png")
+    plt.savefig(plot_path)
+    log_message(f"Energy curve saved: {plot_path}")
+    plt.close()
 
 # Main Script
 if __name__ == "__main__":
-    # Audio file path
+    # Input audio file
     audio_file = r"audio\Frasier1.wav"
-    
+    base_filename = os.path.splitext(os.path.basename(audio_file))[0]
+
+    # Output directories
+    output_base_dir = "outputs"
+    segments_dir = os.path.join(output_base_dir, "segments")
+    plots_dir = os.path.join(output_base_dir, "plots")
+
+    # Ensure output directories exist
+    os.makedirs(output_base_dir, exist_ok=True)
+    os.makedirs(segments_dir, exist_ok=True)
+    os.makedirs(plots_dir, exist_ok=True)
+
     # Step 1: Preprocess audio
     audio, sr = preprocess_audio(audio_file)
 
+    # Log basic audio properties
+    log_message(f"Audio Duration: {len(audio) / sr:.2f}s")
+    log_message(f"Audio Sample Rate: {sr}")
+
     # Step 2: Detect short segments
     short_segments = detect_short_segments(audio, sr, max_duration=2.0, min_energy=0.01)
-    log_message(f"Detected {len(short_segments)} short segments.")
 
     # Step 3: Save short segments
     if short_segments:
-        saved_files = save_segments(audio, sr, short_segments)
-        log_message(f"Saved {len(saved_files)} short segments for further processing.")
+        saved_files = save_segments(audio, sr, short_segments, segments_dir, base_filename)
+        log_message(f"Saved {len(saved_files)} short segments.")
     else:
         log_message("No short speech segments detected.")
 
@@ -103,4 +116,6 @@ if __name__ == "__main__":
     hop_length = int(0.010 * sr)
     energy = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length).flatten()
     times = librosa.frames_to_time(np.arange(len(energy)), sr=sr, hop_length=hop_length)
-    plot_energy(audio, sr, energy, times, short_segments)
+    plot_energy(audio, sr, energy, times, short_segments, plots_dir, base_filename)
+
+    log_message("Processing completed successfully!")
