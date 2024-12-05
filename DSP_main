@@ -82,7 +82,7 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     """Plot the energy curve with detected segments."""
     log_message("Plotting energy curve with detected segments...")
 
-    plt.figure(figsize=(16, 8))  # Make the plot wider by increasing the width
+    plt.figure(figsize=(20, 8))  # Increase the width to make the plot wider
     plt.plot(times, energy, label="RMS Energy")
     plt.axhline(y=energy_threshold, color="red", linestyle="--", label="Energy Threshold")
     
@@ -90,9 +90,9 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     for start, end in segments:
         plt.axvspan(start, end, color="green", alpha=0.3)
 
-    # Customize x-axis ticks for better granularity
+    # Customize x-axis ticks for 1-second intervals
     max_time = times[-1]
-    plt.xticks(np.arange(0, max_time + 5, 5))  # Set x-axis ticks every 5 seconds
+    plt.xticks(np.arange(0, max_time + 1, 1))  # Set x-axis ticks every 1 second
     
     plt.xlabel("Time (s)")
     plt.ylabel("Energy")
