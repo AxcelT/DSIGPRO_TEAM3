@@ -51,7 +51,7 @@ audio/
 python DSP_main.py
 ```
 
-4. Outputs:
+4. Outputs(Change the Output Directory made it match mine):
    - Extracted speech segments will be saved in `outputs/segments/`.
    - Energy curve plots will be saved in `outputs/plots/`.
 
