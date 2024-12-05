@@ -82,7 +82,7 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     """Plot the energy curve with detected segments."""
     log_message("Plotting energy curve with detected segments...")
 
-    plt.figure(figsize=(20, 8))  # Increase the width to make the plot wider
+    plt.figure(figsize=(26, 8))  # Increase the width to make the plot wider
     plt.plot(times, energy, label="RMS Energy")
     plt.axhline(y=energy_threshold, color="red", linestyle="--", label="Energy Threshold")
     
