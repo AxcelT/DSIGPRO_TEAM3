@@ -37,7 +37,7 @@ pip install librosa numpy matplotlib soundfile
 1. Clone the repository:
 ```
 git clone https://github.com/AxcelT/DSIGPRO_TEAM3.git
-cd audio-segmentation
+cd DSIGPRO_TEAM3
 ```
 
 2. Place your input audio file in the `audio/` directory. For example:
