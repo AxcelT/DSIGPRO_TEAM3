@@ -21,8 +21,11 @@ def preprocess_audio(file_path, target_sr=16000):
     return audio, target_sr
 
 # Step 2: Short Speech Detection
-def detect_short_segments(audio, sr, max_duration=2.0, min_energy=0.01):
-    """Detect short speech segments based on energy thresholds and duration."""
+def detect_short_segments(audio, sr, max_duration=1.5, min_energy=0.02, min_gap=0.1):
+    """
+    Detect short speech segments based on energy thresholds and duration.
+    Added stricter criteria for energy and minimum gap between segments.
+    """
     log_message("Detecting short speech segments...")
     frame_length = int(0.025 * sr)  # 25ms frames
     hop_length = int(0.010 * sr)   # 10ms hops
@@ -37,8 +40,9 @@ def detect_short_segments(audio, sr, max_duration=2.0, min_energy=0.01):
         elif e <= min_energy and segment_start is not None:
             segment_end = times[i]
             if segment_end - segment_start <= max_duration:
-                short_segments.append((segment_start, segment_end))
-                log_message(f"Short segment detected: {segment_start:.2f}s - {segment_end:.2f}s")
+                if not short_segments or (segment_start - short_segments[-1][1]) > min_gap:
+                    short_segments.append((segment_start, segment_end))
+                    log_message(f"Short segment detected: {segment_start:.2f}s - {segment_end:.2f}s")
             segment_start = None
 
     log_message(f"Total short segments detected: {len(short_segments)}")
@@ -66,13 +70,14 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     log_message("Plotting energy curve with detected segments...")
     plt.figure(figsize=(12, 6))
     plt.plot(times, energy, label="RMS Energy")
-    plt.axhline(y=0.01, color="red", linestyle="--", label="Energy Threshold")
+    plt.axhline(y=0.02, color="red", linestyle="--", label="Energy Threshold")
     for start, end in segments:
-        plt.axvspan(start, end, color="green", alpha=0.3, label="Detected Segment")
+        plt.axvspan(start, end, color="green", alpha=0.3)
     plt.xlabel("Time (s)")
     plt.ylabel("Energy")
-    plt.legend()
     plt.title(f"Energy Curve for {base_filename}")
+    plt.legend()
+    plt.grid(True)  # Add grid to the plot
     plot_path = os.path.join(output_dir, f"{base_filename}_energy_curve.png")
     plt.savefig(plot_path)
     log_message(f"Energy curve saved: {plot_path}")
@@ -102,7 +107,7 @@ if __name__ == "__main__":
     log_message(f"Audio Sample Rate: {sr}")
 
     # Step 2: Detect short segments
-    short_segments = detect_short_segments(audio, sr, max_duration=2.0, min_energy=0.01)
+    short_segments = detect_short_segments(audio, sr, max_duration=1.5, min_energy=0.02, min_gap=0.1)
 
     # Step 3: Save short segments
     if short_segments:
