@@ -48,7 +48,7 @@ audio/
 
 3. Run the script:
 ```
-python segment_audio.py
+python DSP_main.py
 ```
 
 4. Outputs:
