@@ -73,7 +73,6 @@ def detect_short_segments(audio, sr, max_duration=2, min_energy=energy_threshold
     log_message(f"Total short segments detected: {len(short_segments)}")
     return short_segments
 
-
 # Step 3: Save Short Segments for Subtitle Generation
 def save_segments(audio, sr, segments, output_dir, base_filename, min_segment_duration=1.0):
     """Save detected short speech segments as individual audio files, ensuring minimum 1-second duration."""
