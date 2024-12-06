@@ -182,6 +182,7 @@ def generate_subtitles(segment_files_with_times, output_dir, base_filename):
 if __name__ == "__main__":
     # Input audio file
     audio_file = r"audio\Frasier1.wav"
+    audio_dir = r"audio"
 
     
     if not os.path.exists(audio_file):
