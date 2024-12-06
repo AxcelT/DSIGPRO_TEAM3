@@ -129,28 +129,37 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     plt.close()
 
 # Step 5: Generate Subtitles
-def generate_subtitles(segment_files, output_dir, base_filename):
-    """Generate subtitle file using Whisper."""
+def generate_subtitles(segment_files, segments, output_dir, base_filename):
+    """
+    Generate subtitle file using Whisper.
+    :param segment_files: List of segment file paths.
+    :param segments: List of (start, end) times for each segment in seconds.
+    :param output_dir: Directory to save the subtitles.
+    :param base_filename: Base name for the subtitle file.
+    """
     log_message("Generating subtitles...")
     model = whisper.load_model("base")  # Load Whisper model
     srt_file_path = os.path.join(output_dir, f"{base_filename}.srt")
 
+    def format_timestamp(seconds):
+        """Format seconds as HH:MM:SS,ms for subtitles."""
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        milliseconds = int((seconds - int(seconds)) * 1000)
+        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02},{milliseconds:03}"
+
     with open(srt_file_path, "w") as srt_file:
-        for i, segment_file in enumerate(segment_files):
+        for i, (segment_file, (start, end)) in enumerate(zip(segment_files, segments)):
             log_message(f"Processing segment: {segment_file}")
             
             # Transcribe the audio segment
             result = model.transcribe(segment_file)
             text = result["text"]
             
-            # Generate start and end times for subtitles
-            start_time = i  # Placeholder: Replace with actual timing logic if needed
-            end_time = i + 1
+            # Format timestamps
+            start_timestamp = format_timestamp(start)
+            end_timestamp = format_timestamp(end)
             
-            # Format timestamps for SRT
-            start_timestamp = f"00:{start_time // 60:02}:{start_time % 60:02},000"
-            end_timestamp = f"00:{end_time // 60:02}:{end_time % 60:02},000"
-
             # Write subtitle entry
             srt_file.write(f"{i + 1}\n")
             srt_file.write(f"{start_timestamp} --> {end_timestamp}\n")
@@ -160,6 +169,7 @@ def generate_subtitles(segment_files, output_dir, base_filename):
 
     log_message(f"Subtitles saved to: {srt_file_path}")
     return srt_file_path
+
 
 
 
@@ -206,8 +216,8 @@ if __name__ == "__main__":
         plot_energy(audio, sr, energy, times, short_segments, plots_dir, base_filename)
         log_message(f"Plot generated: {plots_dir}")
 
-        # Step 5: Generate subtitles
-        srt_file_path = generate_subtitles(saved_files, output_base_dir, base_filename)
+        # Step 5: Generate subtitles with segment times
+        srt_file_path = generate_subtitles(saved_files, short_segments, segments_dir, base_filename)
         log_message(f"Subtitles generated: {srt_file_path}")
     else:
         log_message("No short speech segments detected.")
