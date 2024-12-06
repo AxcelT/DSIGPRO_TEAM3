@@ -198,34 +198,41 @@ if __name__ == "__main__":
     os.makedirs(segments_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
 
-    # Step 1: Preprocess audio
-    audio, sr = preprocess_audio(audio_file)
+ # Process each .wav file in the audio directory
+    for audio_file in os.listdir(audio_dir):
+        if audio_file.endswith(".wav"):
+            audio_path = os.path.join(audio_dir, audio_file)
+            base_filename = os.path.splitext(audio_file)[0]
+            
+            log_message(f"Processing file: {audio_path}")
 
-    # Log basic audio properties
-    log_message(f"Audio Duration: {len(audio) / sr:.2f}s")
-    log_message(f"Audio Sample Rate: {sr}")
+            # Step 1: Preprocess audio
+            audio, sr = preprocess_audio(audio_path)
 
-    # Step 2: Detect short segments
-    short_segments = detect_short_segments(audio, sr, max_duration=1.5, min_energy=0.02, min_gap=0.1)
+            # Log basic audio properties
+            log_message(f"Audio Duration: {len(audio) / sr:.2f}s")
+            log_message(f"Audio Sample Rate: {sr}")
 
-    # Step 3: Save short segments
-    if short_segments:
-        saved_files_with_times = save_segments(audio, sr, short_segments, segments_dir, base_filename)
-        log_message(f"Saved {len(saved_files_with_times)} short segments.")
+            # Step 2: Detect short segments
+            short_segments = detect_short_segments(audio, sr, max_duration=1.5, min_energy=0.02, min_gap=0.1)
 
-        # Step 4: Visualize energy curve
-        frame_length = int(0.025 * sr)
-        hop_length = int(0.010 * sr)
-        energy = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length).flatten()
-        times = librosa.frames_to_time(np.arange(len(energy)), sr=sr, hop_length=hop_length)
-        plot_energy(audio, sr, energy, times, short_segments, plots_dir, base_filename)
-        log_message(f"Plot generated: {plots_dir}")
+            # Step 3: Save short segments
+            if short_segments:
+                saved_files_with_times = save_segments(audio, sr, short_segments, segments_dir, base_filename)
+                log_message(f"Saved {len(saved_files_with_times)} short segments.")
 
-        # Step 5: Generate subtitles with segment times
-        srt_file_path = generate_subtitles(saved_files_with_times, segments_dir, base_filename)
-        log_message(f"Subtitles generated: {srt_file_path}")
+                # Step 4: Visualize energy curve
+                frame_length = int(0.025 * sr)
+                hop_length = int(0.010 * sr)
+                energy = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length).flatten()
+                times = librosa.frames_to_time(np.arange(len(energy)), sr=sr, hop_length=hop_length)
+                plot_energy(audio, sr, energy, times, short_segments, plots_dir, base_filename)
+                log_message(f"Plot generated: {plots_dir}")
 
-    else:
-        log_message("No short speech segments detected.")
+                # Step 5: Generate subtitles with segment times
+                srt_file_path = generate_subtitles(saved_files_with_times, segments_dir, base_filename)
+                log_message(f"Subtitles generated: {srt_file_path}")
+            else:
+                log_message("No short speech segments detected.")
 
-    log_message("Processing completed successfully!")
+    log_message("Processing completed for all files!")
