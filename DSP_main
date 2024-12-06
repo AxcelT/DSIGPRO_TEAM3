@@ -132,16 +132,35 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
 def generate_subtitles(segment_files, output_dir, base_filename):
     """Generate subtitle file using Whisper."""
     log_message("Generating subtitles...")
-    model = whisper.load_model("base")
+    model = whisper.load_model("base")  # Load Whisper model
     srt_file_path = os.path.join(output_dir, f"{base_filename}.srt")
-    
+
     with open(srt_file_path, "w") as srt_file:
         for i, segment_file in enumerate(segment_files):
+            log_message(f"Processing segment: {segment_file}")
+            
+            # Transcribe the audio segment
             result = model.transcribe(segment_file)
-            start_time = i + 1
             text = result["text"]
-            srt_file.write(f"{i + 1}\n00:00:01,0000-->00:01 end tex]")
-            break
+            
+            # Generate start and end times for subtitles
+            start_time = i  # Placeholder: Replace with actual timing logic if needed
+            end_time = i + 1
+            
+            # Format timestamps for SRT
+            start_timestamp = f"00:{start_time // 60:02}:{start_time % 60:02},000"
+            end_timestamp = f"00:{end_time // 60:02}:{end_time % 60:02},000"
+
+            # Write subtitle entry
+            srt_file.write(f"{i + 1}\n")
+            srt_file.write(f"{start_timestamp} --> {end_timestamp}\n")
+            srt_file.write(f"{text.strip()}\n\n")
+            
+            log_message(f"Finished processing segment: {segment_file}")
+
+    log_message(f"Subtitles saved to: {srt_file_path}")
+    return srt_file_path
+
 
 
 # Main Script
