@@ -95,7 +95,8 @@ def save_segments(audio, sr, segments, output_dir, base_filename, min_segment_du
         adjusted_end = end_sample / sr  # Adjusted end time for logging
         output_file = os.path.join(output_dir, f"{base_filename}_segment_{i+1}.wav")
         sf.write(output_file, segment_audio, sr)
-        saved_files.append(output_file)
+        saved_files.append((output_file, start, adjusted_end))  # Store file path and times
+
         log_message(f"Segment saved: {output_file} ({start:.2f}s - {adjusted_end:.2f}s)")
     return saved_files
 
@@ -129,11 +130,11 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     plt.close()
 
 # Step 5: Generate Subtitles
-def generate_subtitles(segment_files, segments, output_dir, base_filename):
+# Step 5: Generate Subtitles
+def generate_subtitles(segment_files_with_times, output_dir, base_filename):
     """
     Generate subtitle file using Whisper.
-    :param segment_files: List of segment file paths.
-    :param segments: List of (start, end) times for each segment in seconds.
+    :param segment_files_with_times: List of tuples (file_path, start_time, end_time).
     :param output_dir: Directory to save the subtitles.
     :param base_filename: Base name for the subtitle file.
     """
@@ -149,7 +150,7 @@ def generate_subtitles(segment_files, segments, output_dir, base_filename):
         return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02},{milliseconds:03}"
 
     with open(srt_file_path, "w") as srt_file:
-        for i, (segment_file, (start, end)) in enumerate(zip(segment_files, segments)):
+        for i, (segment_file, start_time, end_time) in enumerate(segment_files_with_times):
             log_message(f"Processing segment: {segment_file}")
             
             # Transcribe the audio segment
@@ -157,8 +158,8 @@ def generate_subtitles(segment_files, segments, output_dir, base_filename):
             text = result["text"]
             
             # Format timestamps
-            start_timestamp = format_timestamp(start)
-            end_timestamp = format_timestamp(end)
+            start_timestamp = format_timestamp(start_time)
+            end_timestamp = format_timestamp(end_time)
             
             # Write subtitle entry
             srt_file.write(f"{i + 1}\n")
@@ -166,6 +167,10 @@ def generate_subtitles(segment_files, segments, output_dir, base_filename):
             srt_file.write(f"{text.strip()}\n\n")
             
             log_message(f"Finished processing segment: {segment_file}")
+
+    log_message(f"Subtitles saved to: {srt_file_path}")
+    return srt_file_path
+
 
     log_message(f"Subtitles saved to: {srt_file_path}")
     return srt_file_path
@@ -205,8 +210,8 @@ if __name__ == "__main__":
 
     # Step 3: Save short segments
     if short_segments:
-        saved_files = save_segments(audio, sr, short_segments, segments_dir, base_filename)
-        log_message(f"Saved {len(saved_files)} short segments.")
+        saved_files_with_times = save_segments(audio, sr, short_segments, segments_dir, base_filename)
+        log_message(f"Saved {len(saved_files_with_times)} short segments.")
 
         # Step 4: Visualize energy curve
         frame_length = int(0.025 * sr)
@@ -217,8 +222,9 @@ if __name__ == "__main__":
         log_message(f"Plot generated: {plots_dir}")
 
         # Step 5: Generate subtitles with segment times
-        srt_file_path = generate_subtitles(saved_files, short_segments, segments_dir, base_filename)
+        srt_file_path = generate_subtitles(saved_files_with_times, segments_dir, base_filename)
         log_message(f"Subtitles generated: {srt_file_path}")
+
     else:
         log_message("No short speech segments detected.")
 
