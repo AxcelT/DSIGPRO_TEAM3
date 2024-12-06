@@ -1,3 +1,4 @@
+import whisper
 import librosa
 import numpy as np
 import os
@@ -94,10 +95,10 @@ def save_segments(audio, sr, segments, output_dir, base_filename, min_segment_du
         adjusted_end = end_sample / sr  # Adjusted end time for logging
         output_file = os.path.join(output_dir, f"{base_filename}_segment_{i+1}.wav")
         sf.write(output_file, segment_audio, sr)
-        saved_files.append(output_file)
+        saved_files.append((output_file, start, adjusted_end))  # Store file path and times
+
         log_message(f"Segment saved: {output_file} ({start:.2f}s - {adjusted_end:.2f}s)")
     return saved_files
-
 
 # Step 4: Visualization
 def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
@@ -120,7 +121,7 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     plt.ylabel("Energy")
     plt.title(f"Energy Curve for {base_filename}")
     plt.legend()
-    plt.grid(True)  # Add grid to the plot
+    plt.grid(True)
 
     # Save the plot
     plot_path = os.path.join(output_dir, f"{base_filename}_energy_curve.png")
@@ -128,11 +129,64 @@ def plot_energy(audio, sr, energy, times, segments, output_dir, base_filename):
     log_message(f"Energy curve saved: {plot_path}")
     plt.close()
 
+# Step 5: Generate Subtitles
+# Step 5: Generate Subtitles
+def generate_subtitles(segment_files_with_times, output_dir, base_filename):
+    """
+    Generate subtitle file using Whisper.
+    :param segment_files_with_times: List of tuples (file_path, start_time, end_time).
+    :param output_dir: Directory to save the subtitles.
+    :param base_filename: Base name for the subtitle file.
+    """
+    log_message("Generating subtitles...")
+    model = whisper.load_model("base")  # Load Whisper model
+    srt_file_path = os.path.join(output_dir, f"{base_filename}.srt")
+
+    def format_timestamp(seconds):
+        """Format seconds as HH:MM:SS,ms for subtitles."""
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        milliseconds = int((seconds - int(seconds)) * 1000)
+        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02},{milliseconds:03}"
+
+    with open(srt_file_path, "w") as srt_file:
+        for i, (segment_file, start_time, end_time) in enumerate(segment_files_with_times):
+            log_message(f"Processing segment: {segment_file}")
+            
+            # Transcribe the audio segment
+            result = model.transcribe(segment_file)
+            text = result["text"]
+            
+            # Format timestamps
+            start_timestamp = format_timestamp(start_time)
+            end_timestamp = format_timestamp(end_time)
+            
+            # Write subtitle entry
+            srt_file.write(f"{i + 1}\n")
+            srt_file.write(f"{start_timestamp} --> {end_timestamp}\n")
+            srt_file.write(f"{text.strip()}\n\n")
+            
+            log_message(f"Finished processing segment: {segment_file}")
+
+    log_message(f"Subtitles saved to: {srt_file_path}")
+    return srt_file_path
+
+
+    log_message(f"Subtitles saved to: {srt_file_path}")
+    return srt_file_path
+
+
+
 
 # Main Script
 if __name__ == "__main__":
     # Input audio file
     audio_file = r"audio\Frasier1.wav"
+    audio_dir = r"audio"
+
+    
+    if not os.path.exists(audio_file):
+        raise FileNotFoundError(f"Audio file not found: {audio_file}") # Verify the file exists
     base_filename = os.path.splitext(os.path.basename(audio_file))[0]
 
     # Output directories
@@ -145,28 +199,41 @@ if __name__ == "__main__":
     os.makedirs(segments_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
 
-    # Step 1: Preprocess audio
-    audio, sr = preprocess_audio(audio_file)
+ # Process each .wav file in the audio directory
+    for audio_file in os.listdir(audio_dir):
+        if audio_file.endswith(".wav"):
+            audio_path = os.path.join(audio_dir, audio_file)
+            base_filename = os.path.splitext(audio_file)[0]
+            
+            log_message(f"Processing file: {audio_path}")
 
-    # Log basic audio properties
-    log_message(f"Audio Duration: {len(audio) / sr:.2f}s")
-    log_message(f"Audio Sample Rate: {sr}")
+            # Step 1: Preprocess audio
+            audio, sr = preprocess_audio(audio_path)
 
-    # Step 2: Detect short segments
-    short_segments = detect_short_segments(audio, sr, max_duration=1.5, min_energy=0.02, min_gap=0.1)
+            # Log basic audio properties
+            log_message(f"Audio Duration: {len(audio) / sr:.2f}s")
+            log_message(f"Audio Sample Rate: {sr}")
 
-    # Step 3: Save short segments
-    if short_segments:
-        saved_files = save_segments(audio, sr, short_segments, segments_dir, base_filename)
-        log_message(f"Saved {len(saved_files)} short segments.")
-    else:
-        log_message("No short speech segments detected.")
+            # Step 2: Detect short segments
+            short_segments = detect_short_segments(audio, sr, max_duration=1.5, min_energy=0.02, min_gap=0.1)
 
-    # Step 4: Visualize energy curve
-    frame_length = int(0.025 * sr)
-    hop_length = int(0.010 * sr)
-    energy = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length).flatten()
-    times = librosa.frames_to_time(np.arange(len(energy)), sr=sr, hop_length=hop_length)
-    plot_energy(audio, sr, energy, times, short_segments, plots_dir, base_filename)
+            # Step 3: Save short segments
+            if short_segments:
+                saved_files_with_times = save_segments(audio, sr, short_segments, segments_dir, base_filename)
+                log_message(f"Saved {len(saved_files_with_times)} short segments.")
 
-    log_message("Processing completed successfully!")
+                # Step 4: Visualize energy curve
+                frame_length = int(0.025 * sr)
+                hop_length = int(0.010 * sr)
+                energy = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length).flatten()
+                times = librosa.frames_to_time(np.arange(len(energy)), sr=sr, hop_length=hop_length)
+                plot_energy(audio, sr, energy, times, short_segments, plots_dir, base_filename)
+                log_message(f"Plot generated: {plots_dir}")
+
+                # Step 5: Generate subtitles with segment times
+                srt_file_path = generate_subtitles(saved_files_with_times, segments_dir, base_filename)
+                log_message(f"Subtitles generated: {srt_file_path}")
+            else:
+                log_message("No short speech segments detected.")
+
+    log_message("Processing completed for all files!")
